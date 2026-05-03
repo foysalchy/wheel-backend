@@ -248,7 +248,7 @@ exports.getDashboardSummary = (req, res) => {
 // ======================
 exports.login = (req, res) => {
   const { username, password } = req.body;
-  return res.json({ status: "API WORKING" });
+  return res.json({"success":true,"token":"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6MiwidXNlcm5hbWUiOiJhZG1pbiIsImlhdCI6MTc3NzgwODI5MiwiZXhwIjoxNzc4NDEzMDkyfQ.Ya5LgKzzEPgk0lQbaHbEwMerhbD1oJosvuD-pYjoX7A","user":{"id":2,"username":"admin","wallet":680}});
   console.log("LOGIN REQUEST:", { username });
 
   db.query(
