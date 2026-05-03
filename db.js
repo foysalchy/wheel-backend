@@ -1,7 +1,7 @@
 const mysql = require("mysql2");
 
 const db = mysql.createConnection({
-  host: "bhaiya.digital",
+  host: "103.163.246.85",
   user: "finixcom_wheel",
   password: "finixcom_wheel",
   database: "wheel",
