@@ -5,6 +5,9 @@ const db = mysql.createConnection({
   user: "finixcom_wheel",
   password: "finixcom_wheel",
   database: "finixcom_wheel",
+  port: 3306,
+  waitForConnections: true,
+  connectionLimit: 10,
 });
 
 db.connect((err) => {
