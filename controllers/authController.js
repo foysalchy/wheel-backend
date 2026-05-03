@@ -248,7 +248,7 @@ exports.getDashboardSummary = (req, res) => {
 // ======================
 exports.login = (req, res) => {
   const { username, password } = req.body;
-
+  return res.json({ status: "API WORKING" });
   console.log("LOGIN REQUEST:", { username });
 
   db.query(
