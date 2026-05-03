@@ -248,47 +248,28 @@ exports.getDashboardSummary = (req, res) => {
 // ======================
 exports.login = (req, res) => {
   const { username, password } = req.body;
-  return res.json({"success":true,"token":"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6MiwidXNlcm5hbWUiOiJhZG1pbiIsImlhdCI6MTc3NzgwODI5MiwiZXhwIjoxNzc4NDEzMDkyfQ.Ya5LgKzzEPgk0lQbaHbEwMerhbD1oJosvuD-pYjoX7A","user":{"id":2,"username":"admin","wallet":680}});
-  console.log("LOGIN REQUEST:", { username });
 
   db.query(
     "SELECT * FROM users WHERE username=?",
     [username],
     (err, result) => {
-      
-      // 🚨 DB ERROR LOG
-      if (err) {
-        console.log("❌ DB ERROR:", err);
-        return res.status(500).json({
-          success: false,
-          message: "Database error",
-          error: err,
-        });
-      }
+      if (err) return res.status(500).json(err);
 
-      console.log("📦 DB RESULT:", result);
-
-      if (result.length === 0) {
-        console.log("⚠️ USER NOT FOUND");
+      if (result.length === 0)
         return res.status(400).json({ message: "User not found" });
-      }
 
       const user = result[0];
 
       const match = bcrypt.compareSync(password, user.password);
 
-      if (!match) {
-        console.log("❌ WRONG PASSWORD");
+      if (!match)
         return res.status(400).json({ message: "Wrong password" });
-      }
 
       const token = jwt.sign(
         { id: user.id, username: user.username },
         process.env.JWT_SECRET,
         { expiresIn: "7d" }
       );
-
-      console.log("✅ LOGIN SUCCESS:", user.id);
 
       res.json({
         success: true,
