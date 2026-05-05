@@ -4,8 +4,9 @@ const upload = require("../middleware/upload"); // <-- Add this line
 
 const auth = require("../controllers/authController");
 
-router.post("/register", auth.register);
+router.post("/register", upload.single("photo"), auth.register);
 router.post("/login", auth.login);
+router.post("/change-password", auth.changePassword);
 router.post(
   "/deposit",
   upload.single("screenshot"),

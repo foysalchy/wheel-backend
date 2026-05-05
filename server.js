@@ -206,19 +206,19 @@ io.on("connection", (socket) => {
   
   socket.on("get_user", (data) => {
     const jwt = require("jsonwebtoken");
-console.log(data,'data')
+ 
     
       const user = jwt.verify(data.token, process.env.JWT_SECRET);
-console.log(user,'data')
-console.log("JWT:", process.env.JWT_SECRET);
+ 
       db.query(
-        "SELECT wallet FROM users WHERE id=?",
+        "SELECT * FROM users WHERE id=?",
         [user.id],
         (err, res) => {
           if (!err && res.length > 0) {
             socket.emit("user_data", {
               wallet: res[0].wallet,
               userId: user.id,
+              data: res[0],
             });
           }
         }

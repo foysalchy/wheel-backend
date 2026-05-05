@@ -5,22 +5,108 @@ const jwt = require("jsonwebtoken");
 // ======================
 // REGISTER
 // ======================
-exports.register = (req, res) => {
-  const { username, password } = req.body;
+ 
+exports.changePassword = (req, res) => {
+  const { userId, oldPassword, newPassword } = req.body;
 
-  const hash = bcrypt.hashSync(password, 10);
+  if (!userId || !oldPassword || !newPassword) {
+    return res.status(400).json({ message: "All fields required" });
+  }
 
+  // 1. get user
   db.query(
-    "INSERT INTO users (username, password, wallet) VALUES (?, ?, ?)",
-    [username, hash, 1000],
-    (err) => {
+    "SELECT password FROM users WHERE id = ?",
+    [userId],
+    (err, result) => {
       if (err) return res.status(500).json(err);
 
-      res.json({ success: true });
+      if (result.length === 0) {
+        return res.status(404).json({ message: "User not found" });
+      }
+
+      const isMatch = bcrypt.compareSync(
+        oldPassword,
+        result[0].password
+      );
+
+      if (!isMatch) {
+        return res.status(400).json({ message: "Old password incorrect" });
+      }
+
+      // 2. hash new password
+      const hash = bcrypt.hashSync(newPassword, 10);
+
+      // 3. update password
+      db.query(
+        "UPDATE users SET password = ? WHERE id = ?",
+        [hash, userId],
+        (err2) => {
+          if (err2) return res.status(500).json(err2);
+
+          return res.json({
+            success: true,
+            message: "Password updated successfully"
+          });
+        }
+      );
     }
   );
 };
+exports.register = (req, res) => {
+  const {
+    name,
+    username,
+    email,
+    phone,
+    password
+  } = req.body;
 
+  const photo = req.file ? req.file.filename : null;
+
+  // validation
+  if (!username || !password) {
+    return res.status(400).json({ message: "Username & password required" });
+  }
+
+  const hash = bcrypt.hashSync(password, 10);
+
+  // check duplicate user
+  db.query(
+    "SELECT id FROM users WHERE username = ? OR email = ?",
+    [username, email],
+    (err, result) => {
+      if (err) return res.status(500).json(err);
+
+      if (result.length > 0) {
+        return res.status(409).json({ message: "User already exists" });
+      }
+
+      // insert user
+      db.query(
+        `INSERT INTO users 
+        (name, username, email, phone, password, photo, wallet) 
+        VALUES (?, ?, ?, ?, ?, ?, ?)`,
+        [
+          name || null,
+          username,
+          email || null,
+          phone || null,
+          hash,
+          photo,
+          1000
+        ],
+        (err, result) => {
+          if (err) return res.status(500).json(err);
+
+          return res.json({
+            success: true,
+            userId: result.insertId
+          });
+        }
+      );
+    }
+  );
+};
 exports.deposit = (req, res) => {
   const { amount, method, accountNumber, trxId } = req.body;
   const screenshot = req.file ? req.file.filename : null;
