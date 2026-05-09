@@ -1,23 +1,31 @@
 const mysql = require("mysql2");
 
-const db = mysql.createPool({
-  host: "103.163.246.85",
-  user: "finixcom_whlive",
-  password: "finixcom_whlive",
-  database: "finixcom_whlive",
+const db = mysql.createConnection({
+  host: "209.42.27.91",
+  user: "microlab_api",
+  password: "microlab_api",
+  database: "microlab_api",
   port: 3306,
   waitForConnections: true,
   connectionLimit: 10,
-  connectTimeout: 10000,
 });
-db.getConnection((err, conn) => {
+
+// const db = mysql.createConnection({
+//   host: "localhost",
+//   user: "root",
+//   password: "",
+//   database: "wheel",
+//   port: 3306,
+//   waitForConnections: true,
+//   connectionLimit: 10,
+// });
+
+db.connect((err) => {
   if (err) {
     console.log("DB Error:", err);
-    return;
+  } else {
+    console.log("MySQL Connected");
   }
-  console.log("DB Pool Connected");
-  conn.release();
 });
- 
 
-module.exports = db.promise();
+module.exports = db;
