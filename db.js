@@ -10,7 +10,14 @@ const db = mysql.createPool({
   connectionLimit: 10,
   connectTimeout: 10000,
 });
-
-// console.log(db, "db config test");
+db.getConnection((err, conn) => {
+  if (err) {
+    console.log("DB Error:", err);
+    return;
+  }
+  console.log("DB Pool Connected");
+  conn.release();
+});
+ 
 
 module.exports = db.promise();
