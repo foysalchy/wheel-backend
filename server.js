@@ -1,3 +1,4 @@
+ 
 const express = require("express");
 require("dotenv").config();
 const http = require("http");
@@ -15,6 +16,9 @@ app.use(express.urlencoded({ extended: true })); // Optional, for form data
 // Routes
 const authRoutes = require("./routes/authRoutes");
 app.use("/api/auth", authRoutes);
+app.get("/", (req, res) => {
+  res.status(200).send("API is running successfully ╨Б╨п╨к╨Р");
+});
 app.use("/uploads", express.static("uploads"));
 const server = http.createServer(app);
 const io = socketIo(server, {
@@ -59,6 +63,67 @@ function sync() {
 // ======================
 // START ROUND
 // ======================
+// function startRound() {
+//   clearInterval(roundTimer);
+//   clearInterval(resultTimer);
+
+//   // ЁЯФе DB CHECK: already running round ржЖржЫрзЗ ржХрж┐ржирж╛
+//   db.query(
+//     "SELECT id FROM rounds WHERE status = 0 ORDER BY id DESC LIMIT 1",
+//     (err, res) => {
+//       if (err) return;
+
+//       // тЭМ ржпржжрж┐ active round ржерж╛ржХрзЗ тЖТ ржирждрзБржи start рж╣ржмрзЗ ржирж╛
+//     //   if (res.length > 0) {
+//     //     console.log("Round already running, skipping new round");
+//     //     return;
+//     //   }
+
+//       // тЬЕ safe to start new round
+//       roundId = Date.now().toString();
+//       timeLeft = ROUND_TIME;
+//       bettingOpen = true;
+
+//       db.query(
+//         "INSERT INTO rounds (roundid, status) VALUES (?, 0)",
+//         [roundId]
+//       );
+
+//       gameState = {
+//         roundId,
+//         timeLeft,
+//         bettingOpen: true,
+//         result: null,
+//         resultHoldTime: 0,
+//         phase: "betting",
+//       };
+
+//       io.emit("round_start", { roundId });
+//       sync();
+
+//       roundTimer = setInterval(() => {
+//         timeLeft--;
+//         gameState.timeLeft = timeLeft;
+
+//         if (timeLeft <= 10) {
+//           bettingOpen = false;
+//           gameState.bettingOpen = false;
+//           gameState.phase = "locked";
+//           io.emit("spinning");
+//         }
+
+//         io.emit("timer", { timeLeft });
+//         sync();
+
+//         if (timeLeft <= 0) {
+//           clearInterval(roundTimer);
+//           spin();
+//         }
+//       }, 1000);
+//     }
+//   );
+// }
+
 function startRound() {
   clearInterval(roundTimer);
   clearInterval(resultTimer);
@@ -66,7 +131,10 @@ function startRound() {
   roundId = Date.now().toString();
   timeLeft = ROUND_TIME;
   bettingOpen = true;
-
+  db.query(
+    "INSERT INTO rounds (roundid, status) VALUES (?, 0)",
+    [roundId]
+  );
   gameState = {
     roundId,
     timeLeft,
@@ -84,7 +152,7 @@ function startRound() {
 
     gameState.timeLeft = timeLeft;
 
-    // 🔥 last 10 sec lock
+    // ЁЯФе last 10 sec lock
     if (timeLeft <= 10) {
       bettingOpen = false;
       gameState.bettingOpen = false;
@@ -101,27 +169,40 @@ function startRound() {
     }
   }, 1000);
 }
-
 // ======================
 // SPIN
 // ======================
 function spin() {
   const finalResult = Math.floor(Math.random() * 9) + 1;
 
+  let userWins = {};
+  let done = 0;
+
   result = finalResult;
   gameState.result = finalResult;
   gameState.phase = "result";
 
-  io.emit("result", { result: finalResult });
-
   // ======================
-  // GET ALL BETS OF ROUND
+  // UPDATE ROUND FIRST
   // ======================
   db.query(
-    "SELECT * FROM bets WHERE round_id=?",
+    "UPDATE rounds SET result=?, status=1, ended_at=NOW() WHERE roundid=?",
+    [finalResult, roundId]
+  );
+
+  // ======================
+  // GET BETS
+  // ======================
+  db.query(
+    "SELECT * FROM bets WHERE round_id=? AND status=0",
     [roundId],
     (err, bets) => {
       if (err) return;
+
+      // ╤А╨╢╨┐╤А╨╢╨╢╤А╨╢тФР ╤А╨╢╨е╤А╨╖╨Ы╤А╨╢╨╕╤А╨╖╨Ы bet ╤А╨╢╨╕╤А╨╢тХЫ ╤А╨╢╨╡╤А╨╢тХЫ╤А╨╢╨е╤А╨╖╨Ч
+      if (!bets.length) {
+        return finishResult();
+      }
 
       bets.forEach((bet) => {
         const isWin = bet.number === finalResult;
@@ -129,20 +210,25 @@ function spin() {
         if (isWin) {
           const winAmount = bet.amount * 3;
 
-          // ======================
-          // WIN CASE
-          // ======================
+          // wallet update
           db.query(
             "UPDATE users SET wallet = wallet + ? WHERE id=?",
             [winAmount, bet.user_id]
           );
 
+          // store user win
+          if (!userWins[bet.user_id]) {
+            userWins[bet.user_id] = 0;
+          }
+          userWins[bet.user_id] += winAmount;
+
+          // mark win bet
           db.query(
             "UPDATE bets SET status=1 WHERE id=?",
             [bet.id]
           );
 
-          // wallet update emit
+          // realtime wallet update
           db.query(
             "SELECT wallet FROM users WHERE id=?",
             [bet.user_id],
@@ -156,40 +242,67 @@ function spin() {
             }
           );
         } else {
-          // ======================
-          // LOSS CASE
-          // ======================
+          // loss
           db.query(
             "UPDATE bets SET status=2 WHERE id=?",
             [bet.id]
           );
         }
+
+        // completion tracking
+        done++;
+
+        if (done === bets.length) {
+          finishResult();
+        }
       });
+
+      // ======================
+      // FINAL FUNCTION (SAFE EMIT)
+      // ======================
+      function finishResult() {
+        // last results update
+        db.query(
+          "SELECT result FROM rounds WHERE status=1 ORDER BY id DESC LIMIT 10",
+          (err, res) => {
+            if (!err) {
+              const results = res.map((r) => r.result);
+              io.emit("last_results", results);
+            }
+          }
+        );
+
+        // ╤В╨м╨Х NOW SAFE EMIT (important)
+        io.emit("result", {
+          result: finalResult,
+          userWins,
+        });
+
+        // ======================
+        // RESULT TIMER
+        // ======================
+        resultHoldTime = 8;
+        gameState.resultHoldTime = 8;
+
+        resultTimer = setInterval(() => {
+          resultHoldTime--;
+          gameState.resultHoldTime = resultHoldTime;
+
+          io.emit("result_timer", {
+            timeLeft: resultHoldTime,
+            result: finalResult,
+          });
+
+          sync();
+
+          if (resultHoldTime <= 0) {
+            clearInterval(resultTimer);
+            startRound();
+          }
+        }, 1000);
+      }
     }
   );
-
-  // ======================
-  // RESULT TIMER
-  // ======================
-  resultHoldTime = 30;
-  gameState.resultHoldTime = 30;
-
-  resultTimer = setInterval(() => {
-    resultHoldTime--;
-    gameState.resultHoldTime = resultHoldTime;
-
-    io.emit("result_timer", {
-      timeLeft: resultHoldTime,
-      result: finalResult,
-    });
-
-    sync();
-
-    if (resultHoldTime <= 0) {
-      clearInterval(resultTimer);
-      startRound();
-    }
-  }, 1000);
 }
 
 // ======================
@@ -200,9 +313,74 @@ io.on("connection", (socket) => {
 
   socket.emit("sync_state", gameState);
 
+
+  socket.on("get_last_results", (data) => {
+    db.query(
+      "SELECT result FROM rounds WHERE status=1 ORDER BY id DESC LIMIT 10",
+      (err, res) => {
+        if (err) return;
+
+        const results = res.map(r => r.result);
+
+        socket.emit("last_results", results);
+      }
+    );
+  });
   // ======================
   // GET USER (wallet load)
   // ======================
+  socket.on("cancel_bet", (data) => {
+    const jwt = require("jsonwebtoken");
+
+    try {
+      const user = jwt.verify(data.token, process.env.JWT_SECRET);
+      const userId = user.id;
+
+      // current round bets only
+      db.query(
+        "SELECT * FROM bets WHERE user_id=? AND round_id=? AND status=0",
+        [userId, roundId],
+        (err, bets) => {
+          if (err || !bets.length) return;
+
+          let totalRefund = 0;
+
+          bets.forEach((b) => {
+            totalRefund += b.amount;
+          });
+
+          // refund wallet
+          db.query(
+            "UPDATE users SET wallet = wallet + ? WHERE id=?",
+            [totalRefund, userId]
+          );
+
+          // mark cancelled
+          db.query(
+            "UPDATE bets SET status=3 WHERE user_id=? AND round_id=?",
+            [userId, roundId]
+          );
+
+          // send updated wallet
+          db.query(
+            "SELECT wallet FROM users WHERE id=?",
+            [userId],
+            (err2, res) => {
+              if (!err2 && res.length) {
+                socket.emit("user_data", {
+                  wallet: res[0].wallet,
+                });
+              }
+            }
+          );
+
+          socket.emit("cancel_success", { refunded: totalRefund });
+        }
+      );
+    } catch (e) {
+      socket.emit("bet_error", { message: "Invalid token" });
+    }
+  });
   
   socket.on("get_user", (data) => {
     const jwt = require("jsonwebtoken");
@@ -227,6 +405,116 @@ io.on("connection", (socket) => {
     //   socket.emit("user_data", { wallet: 0 });
     // }
   });
+  socket.on("get_current_bets", (data) => {
+  const jwt = require("jsonwebtoken");
+
+  try {
+    const user = jwt.verify(data.token, process.env.JWT_SECRET);
+    const userId = user.id;
+
+    db.query(
+      "SELECT number, amount FROM bets WHERE user_id=? AND round_id=? AND status=0",
+      [userId, roundId],
+      (err, bets) => {
+        if (err) return;
+
+        socket.emit("current_bets", bets);
+      }
+    );
+  } catch (e) {
+    socket.emit("current_bets", []);
+  }
+});
+socket.on("repeat_bet", (data) => {
+  const jwt = require("jsonwebtoken");
+console.log('int')
+
+  try {
+    const user = jwt.verify(data.token, process.env.JWT_SECRET);
+    const userId = user.id;
+
+   db.query(
+  `SELECT number, amount 
+   FROM bets 
+   WHERE user_id = ? 
+   AND round_id = (
+     SELECT round_id 
+     FROM bets  
+     WHERE user_id = ? 
+     ORDER BY id DESC 
+     LIMIT 1
+   )`,
+  [userId, userId],
+  (err, bets) => {
+     console.log(bets,'bets')
+        if (err || !bets.length) return;
+
+        let queriesDone = 0;
+console.log('int')
+        bets.forEach((b) => {
+          db.query(
+            "INSERT INTO bets (user_id, number, amount, round_id) VALUES (?, ?, ?, ?)",
+            [userId, b.number, b.amount, roundId],
+            () => {
+              queriesDone++;
+
+              if (queriesDone === bets.length) {
+                const totalBet = bets.reduce((s, x) => s + x.amount, 0);
+
+                // 1╤ПтХХ╨Я╤В╨У╨│ ╤А╨╢╨Ц╤А╨╢╨з╤А╨╖╨Ч wallet check
+                db.query(
+                  "SELECT wallet FROM users WHERE id = ?",
+                  [userId],
+                  (err, res) => {
+                    if (err || !res.length) return;
+
+                    const wallet = res[0].wallet;
+
+                    // ╤В╨н╨Ь insufficient balance
+                    if (wallet < totalBet) {
+                      socket.emit("bet_error", {
+                        message: "Insufficient balance",
+                        wallet,
+                      });
+
+                      return;
+                    }
+
+                    // 2╤ПтХХ╨Я╤В╨У╨│ balance ok ╤В╨Ц╨в update wallet
+                    db.query(
+                      "UPDATE users SET wallet = wallet - ? WHERE id = ?",
+                      [totalBet, userId],
+                      (e1) => {
+                        if (e1) return console.log(e1);
+
+                        // 3╤ПтХХ╨Я╤В╨У╨│ updated wallet fetch
+                        db.query(
+                          "SELECT wallet FROM users WHERE id = ?",
+                          [userId],
+                          (e2, r2) => {
+                            if (!e2 && r2.length) {
+                              socket.emit("user_data", {
+                                wallet: r2[0].wallet,
+                              });
+                            }
+                          }
+                        );
+
+                        socket.emit("repeat_done", bets);
+                      }
+                    );
+                  }
+                );
+              }
+            }
+          );
+        });
+      }
+    );
+  } catch (e) {
+    console.log("repeat error", e.message);
+  }
+});
 
   // ======================
   // PLACE BET
@@ -327,6 +615,9 @@ io.on("connection", (socket) => {
 });
 });
 // ======================
+
+// cancel bet
+
 server.listen(5000, () => {
   console.log("Server running");
   startRound();
