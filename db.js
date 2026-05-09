@@ -19,7 +19,7 @@ const db = mysql.createConnection({
 //   waitForConnections: true,
 //   connectionLimit: 10,
 // });
-
+console.log(db,'db config test')
 db.connect((err) => {
   if (err) {
     console.log("DB Error:", err);
