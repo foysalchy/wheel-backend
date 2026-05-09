@@ -2,9 +2,9 @@ const mysql = require("mysql2");
 
 const db = mysql.createConnection({
   host: "103.163.246.85",
-  user: "finixcom_wheel",
-  password: "finixcom_wheel",
-  database: "finixcom_wheel",
+  user: "finixcom_whlive",
+  password: "finixcom_whlive",
+  database: "finixcom_whlive",
   port: 3306,
   waitForConnections: true,
   connectionLimit: 10,
