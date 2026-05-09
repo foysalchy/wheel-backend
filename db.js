@@ -1,6 +1,8 @@
+ 
+
 const mysql = require("mysql2");
 
-const db = mysql.createConnection({
+const db = mysql.createPool({
   host: "103.163.246.85",
   user: "finixcom_whlive",
   password: "finixcom_whlive",
@@ -8,7 +10,10 @@ const db = mysql.createConnection({
   port: 3306,
   waitForConnections: true,
   connectionLimit: 10,
+  connectTimeout: 10000,
 });
+
+
 
 // const db = mysql.createConnection({
 //   host: "localhost",
@@ -27,5 +32,5 @@ db.connect((err) => {
     console.log("MySQL Connected");
   }
 });
-
-module.exports = db;
+module.exports = db.promise();
+ 
