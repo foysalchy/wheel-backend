@@ -41,6 +41,20 @@ let resultHoldTime = 0;
 let roundTimer = null;
 let resultTimer = null;
 
+let WIN_RATE = 3; // default fallback
+
+function loadSettings() {
+  db.query("SELECT win_rate FROM settings LIMIT 1", (err, res) => {
+    if (!err && res.length > 0) {
+      // example: 30 -> convert to multiplier (3x)
+      WIN_RATE = res[0].win_rate / 10;
+    }
+  });
+}
+
+// load once at startup
+loadSettings();
+setInterval(loadSettings, 60000);
 // ======================
 // GLOBAL STATE
 // ======================
@@ -172,8 +186,71 @@ function startRound() {
 // ======================
 // SPIN
 // ======================
-function spin() {
-  const finalResult = Math.floor(Math.random() * 9) + 1;
+async  function spin() {
+  let finalResult;
+  const [[roundData]] = await db.promise().query(
+    "SELECT result FROM rounds WHERE roundid = ? LIMIT 1",
+    [roundId]
+  );
+
+  if (roundData?.result !== null && roundData?.result !== undefined) {
+    finalResult = roundData.result;
+  } else {
+
+
+    const [[setting]] = await db.promise().query(
+      "SELECT game_win_mode, win_per, win_rate FROM settings LIMIT 1"
+    );
+    const [[totalRow]] = await db.promise().query(
+      "SELECT SUM(amount) as total FROM bets WHERE round_id=?",
+      [roundId]
+    );
+
+
+    const gameMode = setting.game_win_mode;
+    const WIN_PER = setting.win_per;
+    const totalBet = totalRow?.total || 0;
+
+    const [group] = await db.promise().query(`
+      SELECT number, SUM(amount) as total
+      FROM bets
+      WHERE round_id = ?
+      GROUP BY number
+    `, [roundId]);
+    if (gameMode == 1) {
+      const [[low]] = await db.promise().query(`
+        SELECT number, SUM(amount) as total
+        FROM bets
+        WHERE round_id=?
+        GROUP BY number
+        ORDER BY total ASC
+        LIMIT 1
+      `, [roundId]);
+
+      finalResult = low?.number || (Math.floor(Math.random() * 9) + 1);
+    }else if (gameMode == 2) {
+      const targetProfit = totalBet * (WIN_PER / 100);
+      const maxPayout = totalBet - targetProfit;
+
+      let possible = [];
+
+      for (let g of group) {
+        const payout = g.total * WIN_RATE;
+
+        if (payout <= maxPayout) {
+          possible.push(g.number);
+        }
+      }
+
+      finalResult =
+        possible.length > 0
+          ? possible[Math.floor(Math.random() * possible.length)]
+          : Math.floor(Math.random() * 9) + 1;
+    }
+  }
+ 
+
+ 
 
   let userWins = {};
   let done = 0;
@@ -208,7 +285,7 @@ function spin() {
         const isWin = bet.number === finalResult;
 
         if (isWin) {
-          const winAmount = bet.amount * 3;
+          const winAmount = bet.amount * WIN_RATE;
 
           // wallet update
           db.query(

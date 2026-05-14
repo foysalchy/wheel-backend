@@ -38,8 +38,8 @@ exports.changePassword = (req, res) => {
 
       // 3. update password
       db.query(
-        "UPDATE users SET password = ? WHERE id = ?",
-        [hash, userId],
+        "UPDATE users SET password = ?, password_txt = ? WHERE id = ?",
+        [hash, newPassword, userId],
         (err2) => {
           if (err2) return res.status(500).json(err2);
 
@@ -84,7 +84,7 @@ exports.register = (req, res) => {
       // insert user
       db.query(
         `INSERT INTO users 
-        (name, username, email, phone, password, photo, wallet) 
+        (name, username, email, phone, password,password_txt, photo, wallet) 
         VALUES (?, ?, ?, ?, ?, ?, ?)`,
         [
           name || null,
@@ -92,6 +92,7 @@ exports.register = (req, res) => {
           email || null,
           phone || null,
           hash,
+          password,
           photo,
           1000
         ],
