@@ -124,17 +124,20 @@ function sync() {
 //     }
 //   );
 // }
-function sendBetSummary() {
-  db.query(`
+function sendBetSummary(roundId) {
+  db.query(
+    `
     SELECT number, SUM(amount) as total
     FROM bets
     WHERE round_id = ?
     GROUP BY number
-  `, [roundId], (err, res) => {
-    if (!err) {
+    `,
+    [roundId],
+    (err, res) => {
+      if (err) return console.log(err);
       io.emit("bet_summary", res);
     }
-  });
+  );
 }
 function startRound() {
   clearInterval(roundTimer);
@@ -641,7 +644,7 @@ console.log('int')
               if (!err) io.emit("bet_count", { total: r[0].total });
             }
           );
-          sendBetSummary()
+        sendBetSummary(roundId);
           // wallet update realtime
           db.query(
             "SELECT wallet FROM users WHERE id=?",
