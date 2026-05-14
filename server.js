@@ -41,20 +41,7 @@ let resultHoldTime = 0;
 let roundTimer = null;
 let resultTimer = null;
 
-let WIN_RATE = 3; // default fallback
-
-function loadSettings() {
-  db.query("SELECT win_rate FROM settings LIMIT 1", (err, res) => {
-    if (!err && res.length > 0) {
-      // example: 30 -> convert to multiplier (3x)
-      WIN_RATE = res[0].win_rate / 10;
-    }
-  });
-}
-
-// load once at startup
-loadSettings();
-setInterval(loadSettings, 60000);
+ 
 // ======================
 // GLOBAL STATE
 // ======================
@@ -193,14 +180,16 @@ async  function spin() {
     [roundId]
   );
 
+   const [[setting]] = await db.promise().query(
+      "SELECT game_win_mode, win_per, win_rate FROM settings LIMIT 1"
+    );
+    const WIN_RATE = Number(setting.win_rate || 1);
   if (roundData?.result !== null && roundData?.result !== undefined) {
     finalResult = roundData.result;
   } else {
 
 
-    const [[setting]] = await db.promise().query(
-      "SELECT game_win_mode, win_per, win_rate FROM settings LIMIT 1"
-    );
+ 
     const [[totalRow]] = await db.promise().query(
       "SELECT SUM(amount) as total FROM bets WHERE round_id=?",
       [roundId]
@@ -210,6 +199,7 @@ async  function spin() {
     const gameMode = setting.game_win_mode;
     const WIN_PER = setting.win_per;
     const totalBet = totalRow?.total || 0;
+  
 
     const [group] = await db.promise().query(`
       SELECT number, SUM(amount) as total

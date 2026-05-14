@@ -370,3 +370,38 @@ exports.login = (req, res) => {
     }
   );
 };
+exports.getVipHistoryByDate = (req, res) => {
+  const token = req.headers.authorization?.split(" ")[1];
+
+  if (!token) return res.status(401).json({ message: "Unauthorized" });
+
+  try {
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    const userId = decoded.id;
+
+    const { from, to } = req.query;
+
+    let sql = `
+      SELECT id, user_id, amount, is_paid, created_at
+      FROM bets
+      WHERE user_id = ?
+    `;
+
+    const params = [userId];
+
+    if (from && to) {
+      sql += ` AND DATE(created_at) BETWEEN ? AND ? `;
+      params.push(from, to);
+    }
+
+    sql += ` ORDER BY created_at DESC`;
+
+    db.query(sql, params, (err, results) => {
+      if (err) return res.status(500).json(err);
+      res.json(results);
+    });
+
+  } catch (e) {
+    return res.status(401).json({ message: "Invalid token" });
+  }
+};
