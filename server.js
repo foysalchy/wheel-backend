@@ -124,7 +124,18 @@ function sync() {
 //     }
 //   );
 // }
-
+function sendBetSummary() {
+  db.query(`
+    SELECT number, SUM(amount) as total
+    FROM bets
+    WHERE round_id = ?
+    GROUP BY number
+  `, [roundId], (err, res) => {
+    if (!err) {
+      io.emit("bet_summary", res);
+    }
+  });
+}
 function startRound() {
   clearInterval(roundTimer);
   clearInterval(resultTimer);
