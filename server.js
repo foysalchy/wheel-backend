@@ -125,6 +125,7 @@ function sync() {
 //   );
 // }
 function sendBetSummary(roundId) {
+  console.log('hitting')
   db.query(
     `
     SELECT number, SUM(amount) as total
@@ -134,11 +135,16 @@ function sendBetSummary(roundId) {
     `,
     [roundId],
     (err, res) => {
+  console.log('hitting2')
+
       if (err) return console.log(err);
+  console.log('hittin3')
+
       io.emit("bet_summary", res);
     }
   );
 }
+
 function startRound() {
   clearInterval(roundTimer);
   clearInterval(resultTimer);
@@ -631,9 +637,18 @@ console.log('int')
           );
 
           // insert bet
+        
           db.query(
             "INSERT INTO bets (user_id, number, amount, round_id) VALUES (?, ?, ?, ?)",
-            [userId, number, amount, roundId]
+            [userId, number, amount, roundId],
+            (err) => {
+              if (err) return;
+
+              // IMPORTANT: wait 50–100ms for DB consistency
+              setTimeout(() => {
+                sendBetSummary(roundId);
+              }, 50);
+            }
           );
 
           // bet count
@@ -644,7 +659,7 @@ console.log('int')
               if (!err) io.emit("bet_count", { total: r[0].total });
             }
           );
-        sendBetSummary(roundId);
+        
           // wallet update realtime
           db.query(
             "SELECT wallet FROM users WHERE id=?",
@@ -663,7 +678,9 @@ console.log('int')
       socket.emit("bet_error", { message: "Invalid token" });
     }
   });
-
+socket.on("get_bet_summary", (data) => {
+  sendBetSummary(data.roundId);
+});
   socket.on("get_bet_history", (data) => {
   const jwt = require("jsonwebtoken");
 
