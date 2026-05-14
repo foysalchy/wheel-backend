@@ -641,7 +641,7 @@ console.log('int')
               if (!err) io.emit("bet_count", { total: r[0].total });
             }
           );
-
+          sendBetSummary()
           // wallet update realtime
           db.query(
             "SELECT wallet FROM users WHERE id=?",
