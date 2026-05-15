@@ -203,7 +203,7 @@ async  function spin() {
    const [[setting]] = await db.promise().query(
       "SELECT game_win_mode, win_per, win_rate FROM settings LIMIT 1"
     );
-    const WIN_RATE = Number(setting.win_rate || 1);
+    const WIN_RATE = Number(setting.win_ratex || 1);
   if (roundData?.result !== null && roundData?.result !== undefined) {
     finalResult = roundData.result;
   } else {
