@@ -194,70 +194,95 @@ function startRound() {
 // SPIN
 // ======================
 async  function spin() {
-  let finalResult;
-  const [[roundData]] = await db.promise().query(
-    "SELECT result FROM rounds WHERE roundid = ? LIMIT 1",
-    [roundId]
-  );
+    let finalResult;
+    const [[roundData]] = await db.promise().query(
+      "SELECT result FROM rounds WHERE roundid = ? LIMIT 1",
+      [roundId]
+    );
 
    const [[setting]] = await db.promise().query(
       "SELECT game_win_mode, win_per, win_rate FROM settings LIMIT 1"
     );
     const WIN_RATE = Number(setting.win_rate || 1);
-  if (roundData?.result !== null && roundData?.result !== undefined) {
-    finalResult = roundData.result;
-  } else {
+    if (roundData?.result !== null && roundData?.result !== undefined) {
+      finalResult = roundData.result;
+    } else {
+        
 
-
- 
-    const [[totalRow]] = await db.promise().query(
-      "SELECT SUM(amount) as total FROM bets WHERE round_id=?",
-      [roundId]
-    );
-
-
-    const gameMode = setting.game_win_mode;
-    const WIN_PER = setting.win_per;
-    const totalBet = totalRow?.total || 0;
-  
-
-    const [group] = await db.promise().query(`
-      SELECT number, SUM(amount) as total
-      FROM bets
-      WHERE round_id = ?
-      GROUP BY number
+      const [[promoCheck]] = await db.promise().query(`
+      SELECT 
+        SUM(CASE WHEN u.is_promoter = 0 THEN 1 ELSE 0 END) as nonPromoCount
+      FROM bets b
+      JOIN users u ON b.user_id = u.id
+      WHERE b.round_id = ?
     `, [roundId]);
-    if (gameMode == 1) {
-      const [[low]] = await db.promise().query(`
-        SELECT number, SUM(amount) as total
-        FROM bets
-        WHERE round_id=?
-        GROUP BY number
-        ORDER BY total ASC
-        LIMIT 1
-      `, [roundId]);
 
-      finalResult = low?.number || (Math.floor(Math.random() * 9) + 1);
-    }else if (gameMode == 2) {
-      const targetProfit = totalBet * (WIN_PER / 100);
-      const maxPayout = totalBet - targetProfit;
+    const isAllPromote = (promoCheck?.nonPromoCount || 0) === 0;
 
-      let possible = [];
+      if (isAllPromote) {
+        // 👇 all users are promote = 1 → pick random winner from bet numbers
+          const [allBets] = await db.promise().query(`
+          SELECT DISTINCT b.number
+          FROM bets b
+          JOIN users u ON b.user_id = u.id
+          WHERE b.round_id = ?
+        `, [roundId]);
 
-      for (let g of group) {
-        const payout = g.total * WIN_RATE;
+        if (allBets.length > 0) {
+          const randomIndex = Math.floor(Math.random() * allBets.length);
+          finalResult = allBets[randomIndex].number;
+        } else {
+          finalResult = Math.floor(Math.random() * 9) + 1;
+        }
 
-        if (payout <= maxPayout) {
-          possible.push(g.number);
+
+      } else {
+
+        const [[totalRow]] = await db.promise().query(
+          "SELECT SUM(amount) as total FROM bets WHERE round_id=?",
+          [roundId]
+        );
+        const gameMode = setting.game_win_mode;
+        const WIN_PER = setting.win_per;
+        const totalBet = totalRow?.total || 0;
+        const [group] = await db.promise().query(`
+          SELECT number, SUM(amount) as total
+          FROM bets
+          WHERE round_id = ?
+          GROUP BY number
+        `, [roundId]);
+        if (gameMode == 1) {
+          const [[low]] = await db.promise().query(`
+            SELECT number, SUM(amount) as total
+            FROM bets
+            WHERE round_id=?
+            GROUP BY number
+            ORDER BY total ASC
+            LIMIT 1
+          `, [roundId]);
+
+          finalResult = low?.number || (Math.floor(Math.random() * 9) + 1);
+        }else if (gameMode == 2) {
+          const targetProfit = totalBet * (WIN_PER / 100);
+          const maxPayout = totalBet - targetProfit;
+
+          let possible = [];
+
+          for (let g of group) {
+            const payout = g.total * WIN_RATE;
+
+            if (payout <= maxPayout) {
+              possible.push(g.number);
+            }
+          }
+
+          finalResult =
+            possible.length > 0
+              ? possible[Math.floor(Math.random() * possible.length)]
+              : Math.floor(Math.random() * 9) + 1;
         }
       }
-
-      finalResult =
-        possible.length > 0
-          ? possible[Math.floor(Math.random() * possible.length)]
-          : Math.floor(Math.random() * 9) + 1;
     }
-  }
  
 
  
