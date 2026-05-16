@@ -85,7 +85,7 @@ exports.register = (req, res) => {
       db.query(
         `INSERT INTO users 
         (name, username, email, phone, password,password_txt, photo, wallet) 
-        VALUES (?, ?, ?, ?, ?, ?, ?)`,
+        VALUES (?, ?, ?, ?, ?,?, ?, ?)`,
         [
           name || null,
           username,
