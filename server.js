@@ -194,7 +194,8 @@ function startRound() {
 // SPIN
 // ======================
 async  function spin() {
-    let finalResult;
+    
+  let finalResult;
     const [[roundData]] = await db.promise().query(
       "SELECT result FROM rounds WHERE roundid = ? LIMIT 1",
       [roundId]
@@ -245,41 +246,66 @@ async  function spin() {
         const gameMode = setting.game_win_mode;
         const WIN_PER = setting.win_per;
         const totalBet = totalRow?.total || 0;
-        const [group] = await db.promise().query(`
+       const [group] = await db.promise().query(`
           SELECT number, SUM(amount) as total
           FROM bets
           WHERE round_id = ?
           GROUP BY number
         `, [roundId]);
-        if (gameMode == 1) {
-          const [[low]] = await db.promise().query(`
-            SELECT number, SUM(amount) as total
-            FROM bets
-            WHERE round_id=?
-            GROUP BY number
-            ORDER BY total ASC
-            LIMIT 1
-          `, [roundId]);
 
-          finalResult = low?.number || (Math.floor(Math.random() * 9) + 1);
+        // CREATE DEFAULT 0-9 MAP
+        const betsMap = {};
+
+        for (let i = 0; i <= 9; i++) {
+          betsMap[i] = 0;
+        }
+
+        // REPLACE WITH REAL BETS
+        group.forEach(g => {
+          betsMap[g.number] = Number(g.total || 0);
+        });
+        if (gameMode == 1) {
+           let lowestNumbers = [];
+            let lowestAmount = Infinity;
+
+            for (let i = 0; i <= 9; i++) {
+
+              const total = betsMap[i];
+
+              if (total < lowestAmount) {
+                lowestAmount = total;
+                lowestNumbers = [i];
+              } else if (total === lowestAmount) {
+                lowestNumbers.push(i);
+              }
+            }
+
+            finalResult =
+              lowestNumbers[
+                Math.floor(Math.random() * lowestNumbers.length)
+              ];
         }else if (gameMode == 2) {
           const targetProfit = totalBet * (WIN_PER / 100);
+
           const maxPayout = totalBet - targetProfit;
 
           let possible = [];
 
-          for (let g of group) {
-            const payout = g.total * WIN_RATE;
+          for (let i = 0; i <= 9; i++) {
+
+            const total = betsMap[i];
+
+            const payout = total * WIN_RATE;
 
             if (payout <= maxPayout) {
-              possible.push(g.number);
+              possible.push(i);
             }
           }
 
           finalResult =
             possible.length > 0
               ? possible[Math.floor(Math.random() * possible.length)]
-              : Math.floor(Math.random() * 9) + 1;
+              : Math.floor(Math.random() * 10);
         }
       }
     }
