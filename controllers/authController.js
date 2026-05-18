@@ -453,6 +453,60 @@ exports.getBetHistory = (req, res) => {
     return res.status(401).json({ message: "Invalid token" });
   }
 };
+exports.getRoundHistory = (req, res) => {
+  const { type = "1min", page = 1, limit = 10 } = req.query;
+
+  const offset = (page - 1) * limit;
+
+  db.query(
+    `SELECT * FROM rounds ORDER BY created_at ASC`,
+    (err, results) => {
+      if (err) return res.status(500).json(err);
+
+      // STEP 1: GROUP LOGIC
+      const groups = [];
+      let currentGroup = [];
+
+      for (let i = 0; i < results.length; i++) {
+        const curr = results[i];
+        const prev = results[i - 1];
+
+        if (!prev) {
+          currentGroup.push(curr);
+          continue;
+        }
+
+        const diff =
+          (new Date(curr.created_at) - new Date(prev.created_at)) / 60000;
+
+        let isValidGroup = false;
+
+        if (type === "1min" && diff <= 2) isValidGroup = true;
+        if (type === "15min" && diff >= 14 && diff <= 17) isValidGroup = true;
+
+        if (isValidGroup) {
+          currentGroup.push(curr);
+        } else {
+          groups.push(currentGroup);
+          currentGroup = [curr];
+        }
+      }
+
+      if (currentGroup.length) groups.push(currentGroup);
+
+      // STEP 2: PAGINATION ON GROUPS
+      const paginated = groups.slice(offset, offset + limit);
+
+      res.json({
+        success: true,
+        data: paginated,
+        total: groups.length,
+        page: Number(page),
+        totalPages: Math.ceil(groups.length / limit),
+      });
+    }
+  );
+};
 exports.getVipHistoryByDate = (req, res) => {
   const token = req.headers.authorization?.split(" ")[1];
 

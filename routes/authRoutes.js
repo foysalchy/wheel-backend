@@ -18,4 +18,5 @@ router.get("/vip-history", auth.getVipHistoryByDate);
 router.get("/dashboard-summary", auth.getDashboardSummary);
 router.get("/withdraw-history", auth.getWithdrawHistory);
 router.get("/bet-history", auth.getBetHistory);
+router.get("/round-history", auth.getRoundHistory);
 module.exports = router;
