@@ -466,19 +466,20 @@ exports.getBetHistory = (req, res) => {
   }
 };
 exports.getRoundHistory = (req, res) => {
-  const { type = "1min", page = 1, limit = 20 } = req.query;
+  const {
+    type = "1min",
+    page = 1,
+    limit = 20,
+    fromDate = null,
+    toDate = null,
+  } = req.query;
 
   const offset = (page - 1) * limit;
 
   db.query(
-    `SELECT *
-     FROM rounds
-     WHERE status = 1
-     ORDER BY created_at DESC`,
+    `SELECT * FROM rounds WHERE status = 1 ORDER BY created_at DESC`,
     (err, results) => {
-      if (err) {
-        return res.status(500).json(err);
-      }
+      if (err) return res.status(500).json(err);
 
       let filtered = [];
 
@@ -493,33 +494,37 @@ exports.getRoundHistory = (req, res) => {
 
         const diffMinutes = Math.abs(currentTime - prevTime) / 60000;
 
-        // 1 MIN GAME
         if (type === "1min" && diffMinutes <= 2) {
           filtered.push(current);
         }
 
-        // 15 MIN GAME
         if (type === "15min" && diffMinutes >= 14) {
           filtered.push(current);
         }
       }
 
-      // pagination
+      // =========================
+      // FROM - TO DATE FILTER
+      // =========================
+      if (fromDate && toDate) {
+        const from = new Date(fromDate).getTime();
+        const to = new Date(toDate).getTime();
+
+        filtered = filtered.filter((r) => {
+          const time = new Date(r.created_at).getTime();
+          return time >= from && time <= to;
+        });
+      }
+
       const paginated = filtered.slice(offset, offset + Number(limit));
 
-      // group by date
       const grouped = {};
 
       paginated.forEach((round) => {
-        const date = new Date(round.created_at)
-          .toISOString()
-          .split("T")[0];
+        const d = new Date(round.created_at).toISOString().split("T")[0];
 
-        if (!grouped[date]) {
-          grouped[date] = [];
-        }
-
-        grouped[date].push(round);
+        if (!grouped[d]) grouped[d] = [];
+        grouped[d].push(round);
       });
 
       return res.json({
