@@ -125,20 +125,24 @@ function sync() {
 //   );
 // }
 function sendBetSummary(roundId) {
-  console.log('hitting')
+  console.log("hitting");
+
   db.query(
     `
-    SELECT number, SUM(amount) as total
-    FROM bets
-    WHERE round_id = ?
-    GROUP BY number
+    SELECT b.number, SUM(b.amount) as total
+    FROM bets b
+    JOIN users u ON u.id = b.user_id
+    WHERE b.round_id = ?
+      AND (u.is_promoter IS NULL OR u.is_promoter = 0)
+    GROUP BY b.number
     `,
     [roundId],
     (err, res) => {
-  console.log('hitting2')
+      console.log("hitting2");
 
       if (err) return console.log(err);
-  console.log('hittin3')
+
+      console.log("hitting3");
 
       io.emit("bet_summary", res);
     }
