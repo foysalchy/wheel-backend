@@ -454,55 +454,67 @@ exports.getBetHistory = (req, res) => {
   }
 };
 exports.getRoundHistory = (req, res) => {
-  const { type = "1min", page = 1, limit = 10 } = req.query;
+  const { type = "1min", page = 1, limit = 20 } = req.query;
 
   const offset = (page - 1) * limit;
 
   db.query(
-    `SELECT * FROM rounds ORDER BY created_at ASC`,
+    `SELECT *
+     FROM rounds
+     WHERE status = 1
+     ORDER BY created_at DESC`,
     (err, results) => {
-      if (err) return res.status(500).json(err);
+      if (err) {
+        return res.status(500).json(err);
+      }
 
-      // STEP 1: GROUP LOGIC
-      const groups = [];
-      let currentGroup = [];
+      let filtered = [];
 
       for (let i = 0; i < results.length; i++) {
-        const curr = results[i];
-        const prev = results[i - 1];
+        const current = results[i];
+        const prev = results[i + 1];
 
-        if (!prev) {
-          currentGroup.push(curr);
-          continue;
+        if (!prev) continue;
+
+        const currentTime = new Date(current.created_at).getTime();
+        const prevTime = new Date(prev.created_at).getTime();
+
+        const diffMinutes = Math.abs(currentTime - prevTime) / 60000;
+
+        // 1 MIN GAME
+        if (type === "1min" && diffMinutes <= 2) {
+          filtered.push(current);
         }
 
-        const diff =
-          (new Date(curr.created_at) - new Date(prev.created_at)) / 60000;
-
-        let isValidGroup = false;
-
-        if (type === "1min" && diff <= 2) isValidGroup = true;
-        if (type === "15min" && diff >= 14 && diff <= 17) isValidGroup = true;
-
-        if (isValidGroup) {
-          currentGroup.push(curr);
-        } else {
-          groups.push(currentGroup);
-          currentGroup = [curr];
+        // 15 MIN GAME
+        if (type === "15min" && diffMinutes >= 14) {
+          filtered.push(current);
         }
       }
 
-      if (currentGroup.length) groups.push(currentGroup);
+      // pagination
+      const paginated = filtered.slice(offset, offset + Number(limit));
 
-      // STEP 2: PAGINATION ON GROUPS
-      const paginated = groups.slice(offset, offset + limit);
+      // group by date
+      const grouped = {};
 
-      res.json({
+      paginated.forEach((round) => {
+        const date = new Date(round.created_at)
+          .toISOString()
+          .split("T")[0];
+
+        if (!grouped[date]) {
+          grouped[date] = [];
+        }
+
+        grouped[date].push(round);
+      });
+
+      return res.json({
         success: true,
-        data: paginated,
-        total: groups.length,
+        data: Object.values(grouped),
         page: Number(page),
-        totalPages: Math.ceil(groups.length / limit),
+        totalPages: Math.ceil(filtered.length / limit),
       });
     }
   );
