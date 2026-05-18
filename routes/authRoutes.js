@@ -19,4 +19,5 @@ router.get("/dashboard-summary", auth.getDashboardSummary);
 router.get("/withdraw-history", auth.getWithdrawHistory);
 router.get("/bet-history", auth.getBetHistory);
 router.get("/round-history", auth.getRoundHistory);
+router.get("/settings", auth.getGameSettings);
 module.exports = router;

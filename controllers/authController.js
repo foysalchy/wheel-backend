@@ -52,6 +52,18 @@ exports.changePassword = (req, res) => {
     }
   );
 };
+exports.getGameSettings = (req, res) => {
+  db.query(
+    `SELECT game_win_mode, win_per, win_rate, game_time_mode 
+     FROM settings 
+     LIMIT 1`,
+    (err, result) => {
+      if (err) return res.status(500).json(err);
+
+      return res.json(result[0]);
+    }
+  );
+};
 exports.register = (req, res) => {
   const {
     name,
