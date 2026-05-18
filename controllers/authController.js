@@ -370,6 +370,89 @@ exports.login = (req, res) => {
     }
   );
 };
+exports.getBetHistory = (req, res) => {
+  const token = req.headers.authorization?.split(" ")[1];
+
+  if (!token) {
+    return res.status(401).json({ message: "Unauthorized" });
+  }
+
+  try {
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    const userId = decoded.id;
+
+    const { page = 1, limit = 20, from, to, status } = req.query;
+
+    const offset = (page - 1) * limit;
+
+    let sql = `
+      SELECT id, user_id, round_id, number, amount, status, is_paid, created_at
+      FROM bets
+      WHERE user_id = ?
+    `;
+
+    const params = [userId];
+
+    // DATE FILTER
+    if (from && to) {
+      sql += ` AND DATE(created_at) BETWEEN ? AND ? `;
+      params.push(from, to);
+    }
+
+    // STATUS FILTER
+    if (status && status !== "all") {
+      sql += ` AND status = ? `;
+      params.push(status);
+    }
+
+    sql += ` ORDER BY created_at DESC LIMIT ? OFFSET ? `;
+
+    params.push(parseInt(limit), parseInt(offset));
+
+    db.query(sql, params, (err, results) => {
+      if (err) return res.status(500).json(err);
+
+      // total count query
+      let countSql = `
+        SELECT COUNT(*) as total 
+        FROM bets 
+        WHERE user_id = ?
+      `;
+
+      const countParams = [userId];
+
+      if (from && to) {
+        countSql += ` AND DATE(created_at) BETWEEN ? AND ? `;
+        countParams.push(from, to);
+      }
+
+      if (status && status !== "all") {
+        countSql += ` AND status = ? `;
+        countParams.push(status);
+      }
+
+      db.query(countSql, countParams, (err2, countResult) => {
+        if (err2) return res.status(500).json(err2);
+
+        const total = countResult[0].total;
+
+        res.json({
+          success: true,
+          data: results,
+          pagination: {
+            total,
+            page: parseInt(page),
+            limit: parseInt(limit),
+            totalPages: Math.ceil(total / limit),
+          },
+        });
+      });
+    });
+
+  } catch (error) {
+    return res.status(401).json({ message: "Invalid token" });
+  }
+};
 exports.getVipHistoryByDate = (req, res) => {
   const token = req.headers.authorization?.split(" ")[1];
 

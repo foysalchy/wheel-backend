@@ -17,4 +17,5 @@ router.get("/deposit-history", auth.getDepositHistory);
 router.get("/vip-history", auth.getVipHistoryByDate);
 router.get("/dashboard-summary", auth.getDashboardSummary);
 router.get("/withdraw-history", auth.getWithdrawHistory);
+router.get("/bet-history", auth.getBetHistory);
 module.exports = router;
