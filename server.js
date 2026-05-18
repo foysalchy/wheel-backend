@@ -565,67 +565,62 @@ io.on("connection", (socket) => {
 });
 socket.on("repeat_bet", (data) => {
   const jwt = require("jsonwebtoken");
-console.log('int')
 
   try {
     const user = jwt.verify(data.token, process.env.JWT_SECRET);
     const userId = user.id;
 
-   db.query(
-  `SELECT number, amount 
-   FROM bets 
-   WHERE user_id = ? 
-   AND round_id = (
-     SELECT round_id 
-     FROM bets  
-     WHERE user_id = ? 
-     ORDER BY id DESC 
-     LIMIT 1
-   )`,
-  [userId, userId],
-  (err, bets) => {
-     console.log(bets,'bets')
+    // 1. আগে last bets বের করো
+    db.query(
+      `SELECT number, amount 
+       FROM bets 
+       WHERE user_id = ? 
+       AND round_id = (
+         SELECT round_id 
+         FROM bets  
+         WHERE user_id = ? 
+         ORDER BY id DESC 
+         LIMIT 1
+       )`,
+      [userId, userId],
+      (err, bets) => {
         if (err || !bets.length) return;
 
-        let queriesDone = 0;
-console.log('int')
-        bets.forEach((b) => {
-          db.query(
-            "INSERT INTO bets (user_id, number, amount, round_id) VALUES (?, ?, ?, ?)",
-            [userId, b.number, b.amount, roundId],
-            () => {
-              queriesDone++;
+        const totalBet = bets.reduce((s, x) => s + x.amount, 0);
 
-              if (queriesDone === bets.length) {
-                const totalBet = bets.reduce((s, x) => s + x.amount, 0);
+        // 2. আগে wallet check
+        db.query(
+          "SELECT wallet FROM users WHERE id = ?",
+          [userId],
+          (err, res) => {
+            if (err || !res.length) return;
 
-                // 1╤ПтХХ╨Я╤В╨У╨│ ╤А╨╢╨Ц╤А╨╢╨з╤А╨╖╨Ч wallet check
-                db.query(
-                  "SELECT wallet FROM users WHERE id = ?",
-                  [userId],
-                  (err, res) => {
-                    if (err || !res.length) return;
+            const wallet = res[0].wallet;
 
-                    const wallet = res[0].wallet;
+            if (wallet < totalBet) {
+              socket.emit("bet_error", {
+                message: "Insufficient balance",
+                wallet,
+              });
+              return;
+            }
 
-                    // ╤В╨н╨Ь insufficient balance
-                    if (wallet < totalBet) {
-                      socket.emit("bet_error", {
-                        message: "Insufficient balance",
-                        wallet,
-                      });
+            // 3. wallet ok হলে bet insert করো
+            let done = 0;
 
-                      return;
-                    }
+            bets.forEach((b) => {
+              db.query(
+                "INSERT INTO bets (user_id, number, amount, round_id) VALUES (?, ?, ?, ?)",
+                [userId, b.number, b.amount, roundId],
+                () => {
+                  done++;
 
-                    // 2╤ПтХХ╨Я╤В╨У╨│ balance ok ╤В╨Ц╨в update wallet
+                  if (done === bets.length) {
+                    // 4. wallet update
                     db.query(
                       "UPDATE users SET wallet = wallet - ? WHERE id = ?",
                       [totalBet, userId],
-                      (e1) => {
-                        if (e1) return console.log(e1);
-
-                        // 3╤ПтХХ╨Я╤В╨У╨│ updated wallet fetch
+                      () => {
                         db.query(
                           "SELECT wallet FROM users WHERE id = ?",
                           [userId],
@@ -642,11 +637,11 @@ console.log('int')
                       }
                     );
                   }
-                );
-              }
-            }
-          );
-        });
+                }
+              );
+            });
+          }
+        );
       }
     );
   } catch (e) {
