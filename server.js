@@ -214,17 +214,20 @@ async  function spin() {
     } else {
         
 
-      const [[promoCheck]] = await db.promise().query(`
-      SELECT 
-        SUM(CASE WHEN u.is_promoter = 0 THEN 1 ELSE 0 END) as nonPromoCount
-      FROM bets b
-      JOIN users u ON b.user_id = u.id
-      WHERE b.round_id = ?
-    `, [roundId]);
+     const [[promoCheck]] = await db.promise().query(`
+  SELECT 
+    SUM(CASE WHEN u.is_promoter = 0 THEN 1 ELSE 0 END) as nonPromoCount
+  FROM bets b
+  JOIN users u ON b.user_id = u.id
+  WHERE b.round_id = ?
+`, [roundId]);
 
-    const isAllPromote = (promoCheck?.nonPromoCount || 0) === 0;
+const nonPromoCount = Number(promoCheck?.nonPromoCount || 0);
+const isAllPromote = nonPromoCount === 0;
 
+console.log('promo check', promoCheck, 'isAllPromote:', isAllPromote);
       if (isAllPromote) {
+        console.log('all promote mode');
         // 👇 all users are promote = 1 → pick random winner from bet numbers
           const [allBets] = await db.promise().query(`
           SELECT DISTINCT b.number
@@ -242,7 +245,7 @@ async  function spin() {
 
 
       } else {
-
+        console.log('non-promote mode');
         const [[totalRow]] = await db.promise().query(
           "SELECT SUM(amount) as total FROM bets WHERE round_id=?",
           [roundId]
